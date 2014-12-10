@@ -5,9 +5,16 @@
 ########
 
 set -e
+[ "${autoconf}" = 'true' ] || exit 0
+if [ -d /opt/seafile/ccnet ]
+then
+	echo "Configuration Found, not running the autoconf script"
+	exit 0
+else
+	echo "No configuration found, Starting the python autoconf script"
+fi
 
-SCRIPT=$(readlink -f "$0")
-INSTALLPATH=$(dirname "${SCRIPT}")
+INSTALLPATH="/opt/seafile/seafile-server"
 
 cd "$INSTALLPATH"
 
@@ -80,7 +87,7 @@ function check_python () {
         hint="\nOn Debian/Ubntu: apt-get install python-imaging\nOn CentOS/RHEL: yum install python${py26}-imaging"
         check_python_module PIL python-imaging "${hint}"
 
-        hint='\nOn Debian/Ubuntu:\n\nsudo apt-get install python-mysqldb\n\nOn CentOS/RHEL:\n\nsudo yum install MySQL-python'
+        hint='\nOn Debian/Ubuntu:\n\nsudo apt-get install python-mysqldb\n\nOn CentOS/RHEL:\n\nsudo yum install MYSQL-python'
         check_python_module MySQLdb python-mysqldb "${hint}"
     fi
     echo
@@ -90,4 +97,4 @@ check_python;
 
 export PYTHON=$PYTHON
 
-exec $PYTHON "$python_script"
+exec /sbin/setuser seafile $PYTHON "$python_script"

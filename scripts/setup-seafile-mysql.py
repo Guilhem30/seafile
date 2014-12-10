@@ -503,7 +503,7 @@ class NewDBConfigurator(AbstractDBConfigurator):
     '''Handles the case of creating new mysql databases for ccnet/seafile/seahub'''
     def __init__(self):
         AbstractDBConfigurator.__init__(self)
-
+        self.root_user = ''
         self.root_password = ''
         self.root_conn = ''
 
@@ -622,8 +622,8 @@ class NewDBConfigurator(AbstractDBConfigurator):
 
     def grant_db_permission(self, db_name):
         cursor = self.root_conn.cursor()
-        sql = '''GRANT ALL PRIVILEGES ON `%s`.* to `%s` ''' \
-              % (db_name, self.seafile_mysql_user)
+        sql = '''GRANT ALL PRIVILEGES ON `%s`.* to `%s` IDENTIFIED BY '%s' ''' \
+              % (db_name, self.seafile_mysql_user, self.seafile_mysql_password)
 
         try:
             cursor.execute(sql)
@@ -640,7 +640,7 @@ class NewDBConfigurator(AbstractDBConfigurator):
         self.create_db(self.seafile_db_name)
         self.create_db(self.seahub_db_name)
 
-        if self.seafile_mysql_user != 'root':
+        if self.seafile_mysql_user != self.root_user:
             self.grant_db_permission(self.ccnet_db_name)
             self.grant_db_permission(self.seafile_db_name)
             self.grant_db_permission(self.seahub_db_name)
@@ -1147,7 +1147,7 @@ def report_config():
     seafile database:       %(seafile_db_name)s
     seahub database:        %(seahub_db_name)s
     database user:          %(db_user)s
-
+    database password:      %(db_password)s
 '''
     config = {
         'server_name' :         ccnet_config.server_name,
@@ -1161,22 +1161,15 @@ def report_config():
         'admin_email' :         seahub_config.admin_email,
 
 
-        'use_existing_db':       'use exising' if db_config.use_existing_db else 'create new',
+        'use_existing_db':       'use existing' if db_config.use_existing_db else 'create new',
         'ccnet_db_name':        db_config.ccnet_db_name,
         'seafile_db_name':      db_config.seafile_db_name,
         'seahub_db_name':       db_config.seahub_db_name,
-        'db_user':              db_config.seafile_mysql_user
+        'db_user':              db_config.seafile_mysql_user,
+        'db_password':          db_config.seafile_mysql_password
     }
 
     print template % config
-
-    print
-    print '---------------------------------'
-    print 'Press ENTER to continue, or Ctrl-C to abort'
-    print '---------------------------------'
-
-    raw_input()
-
 
 def create_seafile_server_symlink():
     print '\ncreating seafile-server-latest symbolic link ... ',
@@ -1201,22 +1194,45 @@ db_config = None
 def main():
     global db_config
 
-    Utils.welcome()
+    #Utils.welcome()
     warnings.filterwarnings('ignore', category=MySQLdb.Warning)
 
     env_mgr.check_pre_condiction()
 
     # Part 1: collect configuration
-    ccnet_config.ask_questions()
-    seafile_config.ask_questions()
-    seahub_config.ask_questions()
 
-    if AbstractDBConfigurator.ask_use_existing_db():
+    #ccnet_config.ask_questions()
+    #seafile_config.ask_questions()
+    #seahub_config.ask_questions()
+    
+    ccnet_config.port = int(os.environ.get('CCNET_PORT'))
+    ccnet_config.server_name = os.environ.get('CCNET_NAME')
+    ccnet_config.ip_or_domain = os.environ.get('CCNET_IP')
+    seafile_config.seafile_dir = os.path.join(env_mgr.top_dir, 'seafile-data')
+    seafile_config.port = int(os.environ.get('SEAFILE_PORT'))
+    seafile_config.fileserver_port = int(os.environ.get('FILESERVER_PORT'))
+    
+    if os.environ.get('EXISTING_DB') == 'true':
         db_config = ExistingDBConfigurator()
+        db_config.mysql_host = os.environ.get('MYSQL_HOST')
+        db_config.mysql_port = int(os.environ.get('MYSQL_PORT'))
+        db_config.seafile_mysql_password = os.getenv('MYSQL_PASSWORD')
+
     else:
         db_config = NewDBConfigurator()
+        db_config.mysql_host = os.environ.get('MYSQL_HOST')
+        db_config.mysql_port = int(os.environ.get('MYSQL_PORT'))
+        db_config.root_user = os.getenv('MYSQL_ROOT_USER', 'root')
+        db_config.root_password = os.environ.get('MYSQL_ROOT_PASSWORD')
+        db_config.root_conn = db_config.check_mysql_user(db_config.root_user, db_config.root_password)
+        db_config.seafile_mysql_password = os.getenv('MYSQL_PASSWORD', subprocess.check_output(['pwgen','-s','-1','16']).rstrip())
 
-    db_config.ask_questions()
+    db_config.seafile_mysql_user = os.environ.get('MYSQL_USER')
+    db_config.ccnet_db_name = os.environ.get('CCNET_DB_NAME')
+    db_config.seafile_db_name = os.environ.get('SEAFILE_DB_NAME')
+    db_config.seahub_db_name = os.environ.get('SEAHUB_DB_NAME')
+    
+    #db_config.ask_questions()
 
     report_config()
 
